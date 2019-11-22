@@ -1,0 +1,1 @@
+extern void print_reg(void);

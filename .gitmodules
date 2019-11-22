@@ -1,0 +1,3 @@
+[submodule "dependencies/idt_patcher"]
+	path = dependencies/idt_patcher
+	url = https://github.com/stefanocarna/IDT-runtime-patcher
