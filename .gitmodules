@@ -1,3 +1,6 @@
 [submodule "dependencies/idt_patcher"]
 	path = dependencies/idt_patcher
 	url = https://github.com/stefanocarna/IDT-runtime-patcher
+[submodule "dependencies/shook"]
+	path = dependencies/shook
+	url = https://github.com/stefanocarna/SHook.git
