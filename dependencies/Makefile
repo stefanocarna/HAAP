@@ -1,4 +1,4 @@
-DEPENDENCIES = idt_patcher/
+DEPENDENCIES = idt_patcher/ shook/
 
 obj-y += $(DEPENDENCIES)
 

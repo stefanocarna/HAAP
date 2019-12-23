@@ -19,11 +19,13 @@ insert: modules
 # 	sudo insmod $(addsuffix *.ko,$(wildcard $(MODULES)))
 # 	@echo $(addsuffix *.ko,$(wildcard $(MODULES)))
 # 	sudo insmod $(MODULE_NAME).ko
-	sudo insmod driver/idt/idt_patcher.ko
+	sudo insmod dependencies/idt_patcher/idt_patcher.ko
+	sudo insmod dependencies/shook/shook.ko
 	sudo insmod driver/haap.ko
 
 remove:
 	sudo rmmod haap
+	sudo rmmod shook
 	sudo rmmod idt_patcher
 # 	sudo rmmod $(patsubst %.ko,%,$(addsuffix *.ko,$(wildcard $(MODULES))))
 
