@@ -6,13 +6,16 @@
 #include "pmi.h"
 
 #include "specs/msr.h"
-// #include "../idt/idt_patcher.h"
 #include "dependencies.h"
+
+// TODO
+#define MAX_ID_PMC 4
 
 static u8 pmi_line = 0;
 static DEFINE_PER_CPU(u32, pcpu_lvt_bkp);
 
 int pmi_nmi_handler(unsigned int cmd, struct pt_regs *regs);
+int pmi_irq_handler(void);
 
 
 // TODO the pmc IRQ is hard-coded to 241
@@ -72,14 +75,16 @@ static void pmi_nmi_cleanup(void)
 
 static int pmi_irq_setup(void)
 {
-	// idt_patcher_install_entry();
-	// TODO Not implemented
-	return -1;
+	// TODO check IRQ line dynamically
+	idt_patcher_install_entry((unsigned long) pmi_irq_entry, 241, 3);
+	return 0;
 }
 
 static void pmi_irq_cleanup(void)
 {
 	// TODO Not implemented
+	// Actually this method does not anything
+	// Wait untill the module unload
 }
 
 int pmi_init(u8 type)
@@ -116,112 +121,111 @@ void pmi_fini(void)
 	}
 }
 
-
-/* Performance Monitor Interrupt handler */
-void pmi_handler(void)
+/*
+ * Performance Monitor Interrupt handler
+ * Can be used by both NMI and IRQ wrappers
+ */
+static inline int pmi_handler(void)
 {
-// 	int cpu_id, i;
-// 	u64 msr;
-// 	struct statistics *stat, *head, *tail;
-// 	// preempt_disable();
-// 	sample++;
-// 	goto end;
+	// int i;
+	// int cpu_id;
+	// u64 msr;
+	// struct statistics *stat, *head, *tail;
+	// preempt_disable();
+	// sample++;
+	goto end;
 
 
-// 	cpu_id = smp_processor_id();
-// 	stat = kzalloc(sizeof(struct statistics), GFP_ATOMIC);
-// 	if (!stat){ 
-// 		pr_info("Failed kzalloc STAT\n");
-// 		return -ENOMEM;
-// 	}
-// 	head = per_cpu(pcpu_head, cpu_id);
-// 	tail = per_cpu(pcpu_tail, cpu_id);
+	// cpu_id = smp_processor_id();
+	// stat = kzalloc(sizeof(struct statistics), GFP_ATOMIC);
+	// if (!stat){ 
+	// 	pr_info("Failed kzalloc STAT\n");
+	// 	return -ENOMEM;
+	// }
+	// head = per_cpu(pcpu_head, cpu_id);
+	// tail = per_cpu(pcpu_tail, cpu_id);
 
-// 	// Does it make sense?
-// 	rdmsrl(IA32_PERF_FIXED_CTR0, msr);
-// 	stat->fixed0 = msr;
-// 	rdmsrl(IA32_PERF_FIXED_CTR1, msr);
-// 	stat->fixed1 = ~(__this_cpu_read(fixed_reset)) & FIXED_MASK;
-// 	for(i = 0; i < MAX_ID_PMC; i++){
-// 		rdmsrl(MSR_IA32_PMC(i), msr);
-// 		stat->event[i].stat = msr;
-// 	}
-// 	stat->next = NULL;
-// 	//add the new struct to the linked list
-// 	if(per_cpu(pcpu_head, cpu_id) == NULL){
-// 		per_cpu(pcpu_head, cpu_id) = stat;
-// 		per_cpu(pcpu_tail, cpu_id) = stat;
-// 	}
-// 	else{
-// 		per_cpu(pcpu_tail, cpu_id)->next = stat;
-// 		per_cpu(pcpu_tail, cpu_id) = stat;
-// 	}
-// 	__sync_fetch_and_add(&size_stat, 1);
+	// // Does it make sense?
+	// rdmsrl(IA32_PERF_FIXED_CTR0, msr);
+	// stat->fixed0 = msr;
+	// rdmsrl(IA32_PERF_FIXED_CTR1, msr);
+	// stat->fixed1 = ~(__this_cpu_read(fixed_reset)) & FIXED_MASK;
+	// for(i = 0; i < MAX_ID_PMC; i++){
+	// 	rdmsrl(MSR_IA32_PMC(i), msr);
+	// 	stat->event[i].stat = msr;
+	// }
+	// stat->next = NULL;
+	// //add the new struct to the linked list
+	// if(per_cpu(pcpu_head, cpu_id) == NULL){
+	// 	per_cpu(pcpu_head, cpu_id) = stat;
+	// 	per_cpu(pcpu_tail, cpu_id) = stat;
+	// }
+	// else{
+	// 	per_cpu(pcpu_tail, cpu_id)->next = stat;
+	// 	per_cpu(pcpu_tail, cpu_id) = stat;
+	// }
+	// __sync_fetch_and_add(&size_stat, 1);
 
-// 	//reset PMcs
-// 	wrmsrl(IA32_PERF_FIXED_CTR0, 0ULL);
-// 	wrmsrl(IA32_PERF_FIXED_CTR1, __this_cpu_read(fixed_reset));
-// 	for(i = 0; i < MAX_ID_PMC; i++){
-// 		wrmsrl(MSR_IA32_PMC(i), 0ULL);
-// 	}
+	//reset PMcs
+	// wrmsrl(IA32_PERF_FIXED_CTR0, 0ULL);
+	// wrmsrl(IA32_PERF_FIXED_CTR1, __this_cpu_read(fixed_reset));
+	// for(i = 0; i < MAX_ID_PMC; i++){
+	// 	wrmsrl(MSR_IA32_PMC(i), 0ULL);
+	// }
 
-// end:
-// 	/* ack apic */
-// 	apic_eoi();
-// 	/* Unmask PMI as, as it got implicitely masked. */
-// 	apic_write(APIC_LVTPC, 241);
+end:
+	return 1;
 
-// 	// pr_info("PMI done on cpu %x\n", get_cpu());
-// 	// put_cpu();
-// 	// preempt_enable();
+	// pr_info("PMI done on cpu %x\n", get_cpu());
+	// put_cpu();
+	// preempt_enable();
 }
 
-// extern void pmi_handler(void);
-// asm("	.globl pmi_entry\n"
-// 	"pmi_entry:\n"
-// 	"	cld\n"
-// 	"	testq $3,8(%rsp)\n"
-// 	"	jz 1f\n"
-// 	"	swapgs\n"
-// 	"1:\n"
-// 	"	pushq $0\n" /* error code */
-// 	"	pushq %rdi\n"
-// 	"	pushq %rsi\n"
-// 	"	pushq %rdx\n"
-// 	"	pushq %rcx\n"
-// 	"	pushq %rax\n"
-// 	"	pushq %r8\n"
-// 	"	pushq %r9\n"
-// 	"	pushq %r10\n"
-// 	"	pushq %r11\n"
-// 	"	pushq %rbx\n"
-// 	"	pushq %rbp\n"
-// 	"	pushq %r12\n"
-// 	"	pushq %r13\n"
-// 	"	pushq %r14\n"
-// 	"	pushq %r15\n"
-// 	"1:  call pmi_handler\n"
-// 	"	popq %r15\n"
-// 	"	popq %r14\n"
-// 	"	popq %r13\n"
-// 	"	popq %r12\n"
-// 	"	popq %rbp\n"
-// 	"	popq %rbx\n"
-// 	"	popq %r11\n"
-// 	"	popq %r10\n"
-// 	"	popq %r9\n"
-// 	"	popq %r8\n"
-// 	"	popq %rax\n"
-// 	"	popq %rcx\n"
-// 	"	popq %rdx\n"
-// 	"	popq %rsi\n"
-// 	"	popq %rdi\n"
-// 	"	addq $8,%rsp\n" /* error code */
-// 	"	testq $3,8(%rsp)\n"
-// 	"	jz 2f\n"
-// 	"	swapgs\n"
-// 	"2:\n"
-// 	"	iretq");
+asm(	".globl pmi_irq_entry\n"
+	"pmi_irq_entry:\n"
+	"	cld\n"
+	"	testq $3,8(%rsp)\n"
+	"	jz 1f\n"
+	"	swapgs\n"
+	"1:\n"
+	"	pushq $0\n" /* error code */
+	"	pushq %rdi\n"
+	"	pushq %rsi\n"
+	"	pushq %rdx\n"
+	"	pushq %rcx\n"
+	"	pushq %rax\n"
+	"	pushq %r8\n"
+	"	pushq %r9\n"
+	"	pushq %r10\n"
+	"	pushq %r11\n"
+	"	pushq %rbx\n"
+	"	pushq %rbp\n"
+	"	pushq %r12\n"
+	"	pushq %r13\n"
+	"	pushq %r14\n"
+	"	pushq %r15\n"
+	"	call pmi_irq_handler\n"
+	"	popq %r15\n"
+	"	popq %r14\n"
+	"	popq %r13\n"
+	"	popq %r12\n"
+	"	popq %rbp\n"
+	"	popq %rbx\n"
+	"	popq %r11\n"
+	"	popq %r10\n"
+	"	popq %r9\n"
+	"	popq %r8\n"
+	"	popq %rax\n"
+	"	popq %rcx\n"
+	"	popq %rdx\n"
+	"	popq %rsi\n"
+	"	popq %rdi\n"
+	"	addq $8,%rsp\n" /* error code */
+	"	testq $3,8(%rsp)\n"
+	"	jz 2f\n"
+	"	swapgs\n"
+	"2:\n"
+	"	iretq");
 
 
 // u64 samples_pmc = 0;
@@ -263,7 +267,23 @@ void pmi_handler(void)
 
 int pmi_nmi_handler(unsigned int cmd, struct pt_regs *regs)
 {
-	// return handle_ime_event(regs);
-	// TODO
+	int evt;
+
+	evt = pmi_handler();
+
+	return evt;
+}
+
+int pmi_irq_handler(void)
+{
+	int evt;
+
+	evt = pmi_handler();
+
+	/* ack apic */
+	apic_eoi();
+	/* Unmask PMI as, as it got implicitely masked. */
+	apic_write(APIC_LVTPC, 241);
+
 	return 0;
 }

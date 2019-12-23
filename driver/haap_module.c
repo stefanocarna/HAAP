@@ -2,47 +2,24 @@
 #include <linux/moduleparam.h>
 #include <asm/current.h>
 
-#include "tracker.h"
 #include "irq_facility.h"
 #include "ime_pebs.h"
-#include "ime_joe.h"
 
-#include "switcher/switch_hook.h"
 #include "intel/pmu.h"
 #include "device/device.h"
 
 #include "haap_fops.h"
+#include "dependencies.h"
 
 unsigned long long audit = 0;
 int sample = 0;
-
-void hook_function(void)
-{
-	// u64 msr;
-	preempt_disable();
-
-	if (!iso_struct.state)
-		goto off;
-	//pr_info("current tgid: %lu ~~ profiled: %lu\n", current->pid, __this_cpu_read(pcpu_profiled));
-	if (is_pid_present(current->pid)) {
-	// if(current->pid == __this_cpu_read(pcpu_profiled)){
-		//pr_info("\n\n\nENABLE\n\n\n");
-		pmc_on_on_cpu(NULL);
-		goto end;
-	}
-	
-off:
-	pmc_off_on_cpu(NULL);
-end:
-	//put_cpu(); /* enable preemption */
-	preempt_enable();
-}
-
 
 static __init int haap_module_init(void)
 {
 	int err = 0;
 	//check_for_pebs_support();
+
+	struct hook_pair hooks;
 
 	pmc_cleanup();
 	//enable_nmi();
@@ -55,13 +32,18 @@ static __init int haap_module_init(void)
 	// TODO
 	init_pebs_struct();
 	
-	switch_hook_init();
-	switch_hook_add_func((void *) hook_function);
+	hooks.func_pos = pmc_on_on_cpu;
+	hooks.func_neg = pmc_off_on_cpu;
 
-	err = tracker_init();
+	hook_register(&hooks);
+
+	// switch_hook_init();
+	// switch_hook_add_func((void *) hook_function);
+
+	// err = tracker_init();
 	if (err) goto end;
 
-	pr_info("IME module loaded\n");
+	pr_info("HAAP module loaded\n");
 
 end:
 	return err;
@@ -69,8 +51,11 @@ end:
 
 static void __exit haap_module_exit(void)
 {
-	tracker_fini();
-	switch_hook_fini();
+	// tracker_fini();
+	// switch_hook_fini();
+
+	// TODO it should finilize the switch hook
+	switch_hook_pause();
 
 	// TODO
 	exit_pebs_struct();

@@ -14,15 +14,13 @@ EXTRA_CFLAGS =	-std=gnu99					\
 obj-m := $(MODULE_NAME).o
 
 $(MODULE_NAME)-objs := haap_module.o
-# $(MODULE_NAME)-y += idt/*.o
-$(MODULE_NAME)-objs += switcher/*.o
 $(MODULE_NAME)-objs += intel/pmu.o intel/pmi.o
 $(MODULE_NAME)-objs += device/device.o
 # ccflags-y := -I../include
 
 $(MODULE_NAME)-objs += haap_fops.o
 
-$(MODULE_NAME)-objs += tracker.o irq_facility.o ime_handler.o ime_pebs.o ime_joe.o
+$(MODULE_NAME)-objs += ime_pebs.o
 
 # EXTRA_CFLAGS=-I$(PWD)/../include
 
