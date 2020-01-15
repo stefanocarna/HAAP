@@ -8,6 +8,7 @@
 #include "pmi.h"
 
 DEFINE_PER_CPU(struct pmc_cfg *, pcpu_pmc_cfg);
+DEFINE_PER_CPU(struct pmc_data_sample *, pcpu_pmc_data_sample);
 
 // check at runtime
 inline unsigned pmc_max_available(void)
@@ -35,8 +36,6 @@ static int pmc_resource_alloc(void)
 		cfg = kzalloc(sizeof(struct pmc_cfg) * pmc_max_available(), GFP_KERNEL);
 		if (!cfg) goto no_mem;
 		per_cpu(pcpu_pmc_cfg, cpu) = cfg;
-		// per_cpu(pcpu_head, cpu) = NULL;
-		// per_cpu(pcpu_tail, cpu) = NULL;
 	}
 
 	goto out;
@@ -186,8 +185,19 @@ static int pmc_pull_state_on_cpu(void *dummy)
 static void pmc_push_state(void)
 {
 	int k;
+	// u64 msr;
+	// u8 fxd_conf;
 	struct pmc_cfg *cur_cfg = this_cpu_read(pcpu_pmc_cfg);
 
+	/* Fixed PMCs*/
+	// for (k = 0; k < 3; ++k) {
+	// 	fxd_conf = cur_cfg[k].os | cur_cfg[k].usr >> 1 | cur_cfg[k].pmi >> 3;
+	// 	rdmsrl(MSR_IA32_FIXED_CTR_CTRL, msr);
+	// 	wrmsrl(MSR_IA32_FIXED_CTR_CTRL, msr & (fxd_conf >> cur_cfg[k].perf_evt_sel));
+	// 	wrmsrl(MSR_IA32_PMC(k), cur_cfg[k].counter);
+	// }
+
+	/* Normal PMCs*/
 	for (k = 0; k < pmc_max_available(); ++k) {
 		wrmsrl(MSR_IA32_PERFEVTSEL(k), cur_cfg[k].perf_evt_sel);
 		wrmsrl(MSR_IA32_PMC(k), cur_cfg[k].counter);
@@ -207,6 +217,25 @@ static void pmc_setup_on_core(void* arg)
 	// configuration_t* args = (configuration_t*) arg;
 	cpu_id = smp_processor_id();
 
+	/* Fixed PMCs */
+	// TODO change fixed 3 value
+	// for (k = 0, cfg = cpu_cfg->fxd_pmcs; k < 3 && k < cpu_cfg->nr_fxd_pmcs; ++k, ++cfg) {
+	// 	if (cfg->valid) {
+	// 		pmc_deep_copy(&cur_cfg[k], cfg);
+	// 	} else {
+	// 		cur_cfg[k].perf_evt_sel = 0ULL;
+	// 		cur_cfg[k].counter = 0;
+	// 		cur_cfg[k].valid = 0;
+	// 	}
+	// }
+
+	// // TODO change fixed 3 value
+	// for (; k < 3; ++k) {
+	// 	cur_cfg[k].valid = 0;
+	// }
+
+
+	/* Normal PMCs */
 	for (k = 0, cfg = cpu_cfg->pmcs; k < pmc_max_available() && k < cpu_cfg->nr_pmcs; ++k, ++cfg) {
 		if (cfg->valid) {
 			pmc_deep_copy(&cur_cfg[k], cfg);
@@ -236,14 +265,25 @@ static void pmc_print_status_on_syslog_on_cpu(void *dummy)
 {
 	u64 msr;
 	int cpu_id, k;
+	struct pmc_cfg *cur_cfg = this_cpu_read(pcpu_pmc_cfg);
 
 	cpu_id = smp_processor_id();
+
+	rdmsrl(MSR_IA32_PERF_GLOBAL_STATUS_RESET, msr);
+	pr_info("GLOBAL_STATUS_RESET: %llx\n", msr);
+	rdmsrl(MSR_IA32_PERF_GLOBAL_STATUS, msr);
+	pr_info("GLOBAL_STATUS: %llx\n", msr);
+	rdmsrl(MSR_IA32_PERF_GLOBAL_CTRL, msr);
+	pr_info("GLOBAL_CTRL: %llx\n", msr);
 	
 	for (k = 0; k < 4; k++){
-		rdmsrl(MSR_IA32_PERFEVTSEL(k), msr);
-		pr_info("[CPU%d] MSR_IA32_PERFEVTSEL%d: %llx\n", cpu_id, k, msr);
-		rdmsrl(MSR_IA32_PMC(k), msr);
-		pr_info("[CPU%d] PMC%d: %llx\n", cpu_id, k, msr);
+		// TODO
+		if (cur_cfg[k].valid) {
+			rdmsrl(MSR_IA32_PERFEVTSEL(k), msr);
+			pr_info("[CPU%d] MSR_IA32_PERFEVTSEL%d: %llx\n", cpu_id, k, msr);
+			rdmsrl(MSR_IA32_PMC(k), msr);
+			pr_info("[CPU%d] PMC%d: %llx\n", cpu_id, k, msr);
+		}
 	}
 }
 
@@ -293,4 +333,72 @@ struct pmc_cpu_cfg *pmc_get_status_on_cpu(unsigned cpu)
 	return cpu_cfg;
 err_mem:
 	return NULL;
+}
+
+int pmc_set_periodic_sampling(void)
+{
+	// TODO not implemented
+	return -1;
+}
+
+inline int pmc_record_active_sample(int irq_context)
+{
+	int k, nr_pmcs, j = 1;
+	u64 msr;
+	struct pmc_cfg *cfg;
+	struct pmc_data_sample *sample;
+
+	/* Record the PMCs' value */
+	sample = this_cpu_read(pcpu_pmc_data_sample);
+
+	if (!sample) {
+		sample = kmalloc(sizeof(struct pmc_data_sample), irq_context ? GFP_ATOMIC : GFP_KERNEL);
+		if (!sample) {
+			return -ENOMEM;
+		}
+		this_cpu_write(pcpu_pmc_data_sample, sample);
+		goto next;
+	}
+
+	/* Traverse the samples chain */
+	while(sample && sample->next) {
+		sample = sample->next;
+		++j;
+	}
+	++j;
+	
+	sample->next = kmalloc(sizeof(struct pmc_data_sample), irq_context ? GFP_ATOMIC : GFP_KERNEL);
+	if (!sample->next) {
+		return -ENOMEM;
+	}
+	sample = sample->next;
+next:
+	sample->next = NULL;
+
+	cfg = this_cpu_read(pcpu_pmc_cfg);
+
+	for (k = 0, nr_pmcs = 0; k < pmc_max_available(); ++k) {
+		if (cfg[k].valid) ++nr_pmcs;
+	}
+
+	sample->nr_pmcs = nr_pmcs;
+	sample->pmcs = kmalloc(nr_pmcs * sizeof(struct pmc_data), irq_context ? GFP_ATOMIC : GFP_KERNEL);
+
+	if (!sample->pmcs) {
+		kfree(sample);
+		return -ENOMEM;
+	}
+
+	for (k = 0, nr_pmcs = 0; k < pmc_max_available(); ++k) {
+		if (cfg[k].valid) {
+			rdmsrl(MSR_IA32_PMC(nr_pmcs), msr);
+			sample->pmcs[nr_pmcs].event = cfg[k].evt | (cfg[k].umask << 8);
+			sample->pmcs[nr_pmcs].value = msr;
+			++nr_pmcs;
+		}
+	}
+
+	pr_info("[CPU %u] Sample recorded - last NULL ? %u - found %u\n", smp_processor_id(), !sample, j);
+
+	return 0;
 }

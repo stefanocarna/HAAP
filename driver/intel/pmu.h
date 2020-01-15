@@ -7,6 +7,7 @@
 		(x)->counter = (y)->counter; \
 		(x)->pebs = (y)->pebs; \
 		(x)->valid = (y)->valid; \
+		(x)->fixed = (y)->fixed; \
 	} while(0)
 
 struct pmc_cfg {
@@ -21,17 +22,35 @@ struct pmc_cfg {
 	u32 counter;
 	unsigned pebs;
 	unsigned valid;
+
+	unsigned fixed;
 	// u64 cpu_mask;
 } __attribute__((packed));
 
 struct pmc_cpu_cfg {
 	unsigned  cpu;
-	// insert fixed
+
+	unsigned nr_fxd_pmcs;
+	struct pmc_cfg *fxd_pmcs;
+	
 	unsigned nr_pmcs;
 	struct pmc_cfg *pmcs;
 } __attribute__((packed));
 
+struct pmc_data {
+	unsigned long event;
+	unsigned long value;
+};
+
+struct pmc_data_sample {
+	unsigned long tsc;
+	unsigned nr_pmcs;
+	struct pmc_data *pmcs;
+	struct pmc_data_sample *next;
+};
+
 extern __percpu struct pmc_cfg *pcpu_pmc_cfg;
+extern __percpu struct pmc_data_sample *pcpu_pmc_data_sample;
 // DEFINE_PER_CPU(struct pmc_cfg *, pcpu_pmc_cfg);
 
 extern struct pmc_cfg *get_pmc_config(unsigned pmc_id, unsigned cpu);
@@ -64,5 +83,9 @@ extern void pmc_print_status_on_syslog(void);
 // extern void pmc_get_status(void);
 
 extern struct pmc_cpu_cfg *pmc_get_status_on_cpu(unsigned cpu);
+
+extern int pmc_set_periodic_sampling(void);
+
+extern int pmc_record_active_sample(int irq_context);
 
 #endif /* _PMU_H */

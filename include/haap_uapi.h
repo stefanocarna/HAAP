@@ -31,20 +31,30 @@
 #define HAAP_DEBUG_PRINT		_IO(HAAP_IOC_MAGIC, _IO_NB + 15)
 
 struct pmc_conf {
-	uint64_t event; 
 	uint64_t start;
-	uint64_t reset; 
-	int offcore;
-	int user;
-	int kernel;
-	int pebs;
-	int counting;
+	uint64_t reset;
+	unsigned user;
+	unsigned kernel;
+	unsigned counting;
+	
+	uint64_t event;
+
+	unsigned pebs;
+
+	unsigned fixed;
+	// unsigned offcore;
 };
 
 struct pmc_conf_list {
 	uint64_t cpu_mask;
-	unsigned size;
+	unsigned nr_pmcs;
 	struct pmc_conf *pmcs;
+
+	unsigned nr_fxd_pmcs;
+	struct pmc_conf *fxd_pmcs;
+
+	// unsigned nr_off_pmcs;
+	// struct pmc_conf *off_pmcs;
 };
 
 struct event_stat {
@@ -55,6 +65,17 @@ struct event_stat {
 struct event_stat_list {
 	unsigned size;
 	struct event_stat *pmcs;
+};
+
+struct cpu_pmc_sample {
+	unsigned cpu_id;
+	struct event_stat *pmcs;	
+	unsigned nr_pmcs;
+};
+
+struct cpu_pmc_sample_list {
+	struct cpu_pmc_sample *cpus;	
+	unsigned nr_cpus;
 };
 
 #endif /* _HAAP_UAPI_H */

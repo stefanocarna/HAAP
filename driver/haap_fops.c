@@ -59,67 +59,172 @@ u64 get_reset_value(int pmc_id){
 // 	per_cpu(pcpu_head, cpu_id) = NULL;
 // }
 
+// static long __setup_pmc(void *arg)
+// {
+// 	int err, i, j, k;
+// 	int n_cpus = 1; //num_online_cpus();
+// 	struct pmc_cpu_cfg cpu_cfg;
+// 	struct pmc_conf_list *pmc_list;
+// 	struct pmc_conf *user_ptr;
+
+// 	pmc_list = (struct pmc_conf_list *) kzalloc(n_cpus * sizeof(struct pmc_conf_list), GFP_KERNEL);
+// 	if (!pmc_list) {
+// 		err = -ENOMEM;
+// 		goto err_list;
+// 	}
+
+// 	err = access_ok((void *)arg, n_cpus * sizeof(struct pmc_conf_list));
+// 	if(!err) goto err_list;
+
+
+// 	err = copy_from_user(pmc_list, (void *)arg, n_cpus * sizeof(struct pmc_conf_list));
+// 	if(err) goto err_list;
+
+// 	// Copy pointer reference for the deep copy
+// 	user_ptr = pmc_list->pmcs;
+
+// 	// TODO change the hardcode 9 value with a dynamic one
+
+// 	pmc_list->pmcs = (struct pmc_conf *) kzalloc(pmc_list->size * sizeof(struct pmc_conf), GFP_KERNEL);
+// 	if (!pmc_list->pmcs) goto err_list;
+
+// 	pr_info("DEBUG before copy - PMC1.counter: %llx\n", pmc_list->pmcs[1].start);
+
+// 	err = access_ok((void *) user_ptr, pmc_list->size * sizeof(struct pmc_conf));
+	
+// 	if(!err) goto err_pmcs;
+
+// 	err = copy_from_user(pmc_list->pmcs, (void *)user_ptr, pmc_list->size * sizeof(struct pmc_conf));
+// 	if(err) goto err_pmcs;
+
+// 	cpu_cfg.nr_pmcs = pmc_list->size;
+// 	cpu_cfg.pmcs = kzalloc((pmc_list->size) * sizeof(struct pmc_cfg), GFP_KERNEL);
+	
+// 	if(err) goto err_cfg;
+	
+// 	for (i = 0, j = 0, k = 0; i < pmc_list->size; ++i) {
+// 		// It's a union, do it before assigning other values
+// 		cpu_cfg.pmcs[i].perf_evt_sel = pmc_list->pmcs[i].event;
+// 		cpu_cfg.pmcs[i].en = 1;
+// 		cpu_cfg.pmcs[i].pmi = !pmc_list->pmcs[i].counting && !pmc_list->pmcs[i].pebs;
+// 		cpu_cfg.pmcs[i].usr = pmc_list->pmcs[i].user;
+// 		cpu_cfg.pmcs[i].os = pmc_list->pmcs[i].kernel;
+// 		cpu_cfg.pmcs[i].pebs = pmc_list->pmcs[i].pebs;
+// 		//TODO reset e start
+// 		cpu_cfg.pmcs[i].counter = pmc_list->pmcs[i].start;
+// 		pr_info("DEBUG inside - PMC%u.counter: %llx\n", i, pmc_list->pmcs[i].start);	
+// 		cpu_cfg.pmcs[i].reset = pmc_list->pmcs[i].reset;
+// 		cpu_cfg.pmcs[i].valid = 1;
+// 	}
+
+// 	// TODO setup the PMCs
+
+// 	pmc_setup(&cpu_cfg);
+// 	// TODO send pebs information
+// 	// on_each_cpu(pebs_init, (void *) args, 1);
+
+// 	kfree(cpu_cfg.pmcs);
+// err_cfg:
+// err_pmcs:
+// 	// kfree(pmc_list->pmcs);
+// err_list:
+// 	// kfree(pmc_list);
+// 	return err;
+// }
+
 static long __setup_pmc(void *arg)
 {
 	int err, i;
-	int n_cpus = 1; //num_online_cpus();
+	// int n_cpus = 1; //num_online_cpus();
 	struct pmc_cpu_cfg cpu_cfg;
-	struct pmc_conf_list *pmc_list;
-	struct pmc_conf *user_ptr;
+	struct pmc_conf_list usr_pmc_list;
 
-	pmc_list = (struct pmc_conf_list *) kzalloc(n_cpus * sizeof(struct pmc_conf_list), GFP_KERNEL);
-	if (!pmc_list) {
-		err = -ENOMEM;
-		goto err_list;
-	}
+	struct pmc_conf *user_pmcs_ptr;
 
-	err = access_ok((void *)arg, n_cpus * sizeof(struct pmc_conf_list));
+	err = access_ok((void *)arg, sizeof(struct pmc_conf_list));
 	if(!err) goto err_list;
 
-
-	err = copy_from_user(pmc_list, (void *)arg, n_cpus * sizeof(struct pmc_conf_list));
+	err = copy_from_user((void *)&usr_pmc_list, (void *)arg, sizeof(struct pmc_conf_list));
 	if(err) goto err_list;
 
-	// Copy pointer reference for the deep copy
-	user_ptr = pmc_list->pmcs;
+	/* Work on fixed PMCs */
+	/* Copy pointer reference for the deep copy */
+	// user_pmcs_ptr = usr_pmc_list.fxd_pmcs;
 
 	// TODO change the hardcode 9 value with a dynamic one
+	// usr_pmc_list.fxd_pmcs = (struct pmc_conf *) kzalloc(usr_pmc_list.nr_fxd_pmcs * sizeof(struct pmc_conf), GFP_KERNEL);
+	// if (!usr_pmc_list.fxd_pmcs) goto err_list;
 
-	pmc_list->pmcs = (struct pmc_conf *) kzalloc(pmc_list->size * sizeof(struct pmc_conf), GFP_KERNEL);
-	if (!pmc_list->pmcs) goto err_list;
+	// pr_info("DEBUG before copy - PMC1.counter: %llx\n", pmc_list->pmcs[1].start);
 
-	pr_info("DEBUG before copy - PMC1.counter: %llx\n", pmc_list->pmcs[1].start);
+	// err = access_ok((void *) user_pmcs_ptr, usr_pmc_list.nr_fxd_pmcs * sizeof(struct pmc_conf));
+	// if(!err) goto err_pmcs;
 
-	err = access_ok((void *) user_ptr, pmc_list->size * sizeof(struct pmc_conf));
+	// err = copy_from_user(usr_pmc_list.fxd_pmcs, (void *)user_pmcs_ptr, usr_pmc_list.nr_fxd_pmcs * sizeof(struct pmc_conf));
+	// if(err) goto err_pmcs;
+
+	/* Fill internal configuration struct */
+	// cpu_cfg.nr_fxd_pmcs = usr_pmc_list.nr_fxd_pmcs;
+	// cpu_cfg.fxd_pmcs = kzalloc((usr_pmc_list.nr_fxd_pmcs) * sizeof(struct pmc_cfg), GFP_KERNEL);
 	
+	if(err) goto err_cfg;
+
+	/* Work on normal PMCs */
+	/* Copy pointer reference for the deep copy */
+	user_pmcs_ptr = usr_pmc_list.pmcs;
+
+	// TODO change the hardcode 9 value with a dynamic one
+	usr_pmc_list.pmcs = (struct pmc_conf *) kzalloc(usr_pmc_list.nr_pmcs * sizeof(struct pmc_conf), GFP_KERNEL);
+	if (!usr_pmc_list.pmcs) goto err_list;
+	
+	err = access_ok((void *) user_pmcs_ptr, usr_pmc_list.nr_pmcs * sizeof(struct pmc_conf));
 	if(!err) goto err_pmcs;
 
-	err = copy_from_user(pmc_list->pmcs, (void *)user_ptr, pmc_list->size * sizeof(struct pmc_conf));
+	err = copy_from_user(usr_pmc_list.pmcs, (void *)user_pmcs_ptr, usr_pmc_list.nr_pmcs * sizeof(struct pmc_conf));
 	if(err) goto err_pmcs;
 
-	cpu_cfg.nr_pmcs = pmc_list->size;
-	cpu_cfg.pmcs = kzalloc((pmc_list->size) * sizeof(struct pmc_cfg), GFP_KERNEL);
+	/* Fill internal configuration struct */
+	cpu_cfg.nr_pmcs = usr_pmc_list.nr_pmcs;
+	cpu_cfg.pmcs = kzalloc((usr_pmc_list.nr_pmcs) * sizeof(struct pmc_cfg), GFP_KERNEL);
 	
 	if(err) goto err_cfg;
 	
-	for (i = 0; i < pmc_list->size; ++i) {
+	// for (i = 0; i < usr_pmc_list.nr_fxd_pmcs; ++i) {
+	// 	// It's a union, do it before assigning other values
+	// 	cpu_cfg.fxd_pmcs[i].perf_evt_sel = usr_pmc_list.fxd_pmcs[i].event;
+	// 	cpu_cfg.fxd_pmcs[i].en = 1;
+	// 	cpu_cfg.fxd_pmcs[i].pmi = !usr_pmc_list.fxd_pmcs[i].counting && !usr_pmc_list.fxd_pmcs[i].pebs;
+	// 	cpu_cfg.fxd_pmcs[i].usr = usr_pmc_list.fxd_pmcs[i].user;
+	// 	cpu_cfg.fxd_pmcs[i].os = usr_pmc_list.fxd_pmcs[i].kernel;
+	// 	cpu_cfg.fxd_pmcs[i].pebs = usr_pmc_list.fxd_pmcs[i].pebs;
+	// 	//TODO reset e start
+	// 	cpu_cfg.fxd_pmcs[i].counter = usr_pmc_list.fxd_pmcs[i].start;
+	// 	pr_info("DEBUG inside - PMC%u.counter: %llx\n", i, usr_pmc_list.fxd_pmcs[i].start);	
+	// 	cpu_cfg.fxd_pmcs[i].reset = usr_pmc_list.fxd_pmcs[i].reset;
+	// 	cpu_cfg.fxd_pmcs[i].valid = 1;
+	// }
+
+	for (i = 0; i < usr_pmc_list.nr_pmcs; ++i) {
 		// It's a union, do it before assigning other values
-		cpu_cfg.pmcs[i].perf_evt_sel = pmc_list->pmcs[i].event;
+		cpu_cfg.pmcs[i].perf_evt_sel = usr_pmc_list.pmcs[i].event;
 		cpu_cfg.pmcs[i].en = 1;
-		cpu_cfg.pmcs[i].pmi = !pmc_list->pmcs[i].counting && !pmc_list->pmcs[i].pebs;
-		cpu_cfg.pmcs[i].usr = pmc_list->pmcs[i].user;
-		cpu_cfg.pmcs[i].os = pmc_list->pmcs[i].kernel;
-		cpu_cfg.pmcs[i].pebs = pmc_list->pmcs[i].pebs;
+		cpu_cfg.pmcs[i].pmi = !usr_pmc_list.pmcs[i].counting && !usr_pmc_list.pmcs[i].pebs;
+		cpu_cfg.pmcs[i].usr = usr_pmc_list.pmcs[i].user;
+		cpu_cfg.pmcs[i].os = usr_pmc_list.pmcs[i].kernel;
+		cpu_cfg.pmcs[i].pebs = usr_pmc_list.pmcs[i].pebs;
 		//TODO reset e start
-		cpu_cfg.pmcs[i].counter = pmc_list->pmcs[i].start;
-		pr_info("DEBUG inside - PMC%u.counter: %llx\n", i, pmc_list->pmcs[i].start);	
-		cpu_cfg.pmcs[i].reset = pmc_list->pmcs[i].reset;
+		cpu_cfg.pmcs[i].counter = usr_pmc_list.pmcs[i].start;
+		pr_info("DEBUG inside - PMC%u.counter: %llx\n", i, usr_pmc_list.pmcs[i].start);	
+		cpu_cfg.pmcs[i].reset = usr_pmc_list.pmcs[i].reset;
 		cpu_cfg.pmcs[i].valid = 1;
 	}
 
 	// TODO setup the PMCs
 
+
 	pmc_setup(&cpu_cfg);
+	pr_info("PMC's setup done\n");	
+	
 	// TODO send pebs information
 	// on_each_cpu(pebs_init, (void *) args, 1);
 
@@ -146,48 +251,86 @@ static long __register_pid(pid_t pid)
 
 static long __pack_data_to_user(void *arg)
 {
-	int cpu, k, written = 0, err = 0;
-	struct event_stat_list stat_list;
-	struct event_stat *list_tmp;
-	struct pmc_cpu_cfg *cpu_cfg;
+	int cpu, j = 0, k = 0, err = 0;
+	// struct event_stat_list stat_list;
+	// struct event_stat *list_tmp;
+	// struct pmc_cpu_cfg cpu_cfg;
+
+	struct event_stat *samples;
+	struct cpu_pmc_sample usr_cpu_list;
+	struct pmc_data_sample *this_pmc_data_sample;
 	
-	err = access_ok((void *)arg, sizeof(struct event_stat_list));
+
+
+	err = access_ok((void *)arg, sizeof(struct cpu_pmc_sample));
 	if(!err) goto err_list;
 
-	err = copy_from_user(&stat_list, (void *)arg, sizeof(struct event_stat_list));
+	err = copy_from_user(&usr_cpu_list, (void *)arg, sizeof(struct cpu_pmc_sample));
 	if(err) {
 		goto err_list;
 	}
 
-	if (stat_list.size <= 0) {
+	if (usr_cpu_list.nr_pmcs <= 0) {
 		goto no_pmc;
 	}
 
-	err = access_ok((void *)stat_list.pmcs, stat_list.size * sizeof(struct event_stat));
-
+	err = access_ok((void *)usr_cpu_list.pmcs, usr_cpu_list.nr_pmcs * sizeof(struct event_stat));
 	if(!err) goto err_list;
+
+	/* Allocate samples buffer */
+	samples = kzalloc(usr_cpu_list.nr_pmcs * sizeof(struct event_stat), GFP_KERNEL);
+	if (!samples) {
+		pr_warn("Cannot allocate memory...\n");
+		goto err_list;
+	}
 
 	// TODO WARNING should we stop the profilation?
 
+	pr_info("Start reading... (%u)\n", usr_cpu_list.nr_pmcs);
 	for_each_possible_cpu(cpu) {
 
-		cpu_cfg = pmc_get_status_on_cpu(cpu);
+		// cpu_cfg = pmc_get_status_on_cpu(cpu);
+		pr_info("CPU %u loop...\n", cpu);
 
-		list_tmp = kzalloc(cpu_cfg->nr_pmcs * sizeof(struct event_stat), GFP_KERNEL);
-		if (!list_tmp) {
-			pr_warn("Cannot allocate memory...\n");
-			goto err_list;
+		// list_tmp = kzalloc(cpu_cfg->nr_pmcs * sizeof(struct event_stat), GFP_KERNEL);
+		// if (!list_tmp) {
+		// 	pr_warn("Cannot allocate memory...\n");
+		// 	goto err_list;
+		// }
+
+		/* Read from each COU buffer */
+		this_pmc_data_sample = per_cpu(pcpu_pmc_data_sample, cpu);
+
+		pr_info("before while this_pmc_data_sample ? %u\n", !!this_pmc_data_sample);
+		/* Go on until you have filled the samples buffer or there is not any sample left */
+		while (k < usr_cpu_list.nr_pmcs && this_pmc_data_sample) {
+			// TODO we may get some samples twice during repeated invocations
+			for (j = 0; k < usr_cpu_list.nr_pmcs && j < this_pmc_data_sample->nr_pmcs; ++j) {
+				samples[k].event = this_pmc_data_sample->pmcs[j].event;
+				samples[k].value = this_pmc_data_sample->pmcs[j].value;
+				++k;
+				pr_info("End for k: %u, nr_pmcs: %u, j: %u, pmcs: %u\n", k, usr_cpu_list.nr_pmcs, j, this_pmc_data_sample->nr_pmcs);
+			}
+			this_pmc_data_sample = this_pmc_data_sample->next;
+			pr_info("End while this_pmc_data_sample ? %u at k: %u\n", !!this_pmc_data_sample, k);
 		}
+		pr_info("After while k is %u\n", k);
 
-		for (k = 0; written < stat_list.size && k < cpu_cfg->nr_pmcs; ++k) {
-			list_tmp[k].event = cpu_cfg->pmcs[k].perf_evt_sel;
-			list_tmp[k].value = cpu_cfg->pmcs[k].counter;
+		/* Draw and update the current CPU buffer */
+		per_cpu(pcpu_pmc_data_sample, cpu) = this_pmc_data_sample;
 
-		}
-		copy_to_user((void *)&stat_list.pmcs[written], list_tmp, k * sizeof(struct event_stat));
+		// for (k = 0; written < stat_list.size && k < cpu_cfg->nr_pmcs; ++k) {
+		// 	list_tmp[k].event = cpu_cfg->pmcs[k].perf_evt_sel;
+		// 	list_tmp[k].value = cpu_cfg->pmcs[k].counter;
 
-		written += cpu_cfg->nr_pmcs;
+		// }
+		// copy_to_user((void *)&stat_list.pmcs[written], list_tmp, k * sizeof(struct event_stat));
+
+		// written += cpu_cfg->nr_pmcs;
 	}
+	
+	copy_to_user((void *)&usr_cpu_list.nr_pmcs, &k, sizeof(unsigned));
+	copy_to_user((void *)usr_cpu_list.pmcs, samples, k * sizeof(struct event_stat));
 
 no_pmc:
 err_list:

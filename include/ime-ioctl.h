@@ -25,16 +25,16 @@ typedef struct{
 	pmc_conf_t pmcs[MAX_ID_PMC];
 }configuration_t;
 
-struct event_stat{
-	uint64_t event;
-	uint64_t stat;
-};
+// struct event_stat{
+// 	uint64_t event;
+// 	uint64_t stat;
+// };
 
-struct statistics_user{
-	uint64_t fixed0;
-	uint64_t fixed1;
-	struct event_stat event[MAX_ID_PMC];
-};
+// struct statistics_user{
+// 	uint64_t fixed0;
+// 	uint64_t fixed1;
+// 	struct event_stat event[4];
+// };
 
 struct pebs_user{
 	uint64_t eflags;	// 0x00
@@ -83,10 +83,10 @@ struct buffer_struct {
 #define IME_READ_BUFFER			_IO(IME_IOC_MAGIC, _IO_NB+5)
 #define IME_RESET_BUFFER		_IO(IME_IOC_MAGIC, _IO_NB+6)
 #define IME_SIZE_BUFFER			_IO(IME_IOC_MAGIC, _IO_NB+7)
-#define JOE_PROFILER_ON			_IO(IME_IOC_MAGIC, _IO_NB+8)
-#define JOE_PROFILER_OFF		_IO(IME_IOC_MAGIC, _IO_NB+9)
-#define JOE_ADD_TID			_IO(IME_IOC_MAGIC, _IO_NB+10)
-#define JOE_DEL_TID			_IO(IME_IOC_MAGIC, _IO_NB+11)
+// #define JOE_PROFILER_ON			_IO(IME_IOC_MAGIC, _IO_NB+8)
+// #define JOE_PROFILER_OFF		_IO(IME_IOC_MAGIC, _IO_NB+9)
+// #define JOE_ADD_TID			_IO(IME_IOC_MAGIC, _IO_NB+10)
+// #define JOE_DEL_TID			_IO(IME_IOC_MAGIC, _IO_NB+11)
 #define IME_EVT_STATS			_IO(IME_IOC_MAGIC, _IO_NB+12)
 #define IME_SIZE_STATS			_IO(IME_IOC_MAGIC, _IO_NB+13)
 #define IME_WAIT			_IO(IME_IOC_MAGIC, _IO_NB+14)

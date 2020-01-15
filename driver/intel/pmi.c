@@ -3,20 +3,17 @@
 #include <asm/apic.h>
 #include <asm/nmi.h>
 
+#include "pmu.h"
 #include "pmi.h"
 
 #include "specs/msr.h"
 #include "dependencies.h"
-
-// TODO
-#define MAX_ID_PMC 4
 
 static u8 pmi_line = 0;
 static DEFINE_PER_CPU(u32, pcpu_lvt_bkp);
 
 int pmi_nmi_handler(unsigned int cmd, struct pt_regs *regs);
 int pmi_irq_handler(void);
-
 
 // TODO the pmc IRQ is hard-coded to 241
 static void pmi_lvt_setup_on_cpu(void *line)
@@ -30,9 +27,6 @@ static void pmi_lvt_setup_on_cpu(void *line)
 	} else {
 		apic_write(APIC_LVTPC, (u8)irq_line);		
 	}
-
-	// TODO idt install_hook
-	// TODO switcher install_hook
 }
 
 static void pmi_lvt_cleanup_on_cpu(void *dummy)
@@ -125,8 +119,53 @@ void pmi_fini(void)
  * Performance Monitor Interrupt handler
  * Can be used by both NMI and IRQ wrappers
  */
-static inline int pmi_handler(void)
+static inline int pmi_handler(unsigned apic_value)
 {
+
+	u64 global;//, msr, reset;
+	int i, k = 0;
+	pr_info("IN NMI HANDLER\n");
+	rdmsrl(MSR_IA32_PERF_GLOBAL_STATUS, global);
+
+	// PEBS check
+	// if(global & BIT(62)){ 
+	// 	wrmsrl(MSR_IA32_PERF_GLOBAL_STATUS_RESET, BIT(62));
+	// 	// write_buffer();
+
+	// 	for(i = 0; i < pmc_max_available(); i++){
+	// 		rdmsrl(MSR_IA32_PMC(i), msr);
+	// 		reset = get_reset_value(i);
+	// 		if(msr < reset){
+	// 			wrmsrl(MSR_IA32_PMC(i), reset);
+	// 		}
+	// 	}
+	// 	return 1;
+	// }
+
+	// Plain PMCs check
+	/* Check for PMI coming from PMCs */
+	if (global & 0xFULL) {
+		for (i = 0; i < pmc_max_available(); i++) {
+			if (global & BIT_ULL(i)) {
+				pr_info("Look for: %u - %llx\n", i, BIT_ULL(i));
+				// reset the single pmc value
+				// wrmsrl(MSR_IA32_PMC(i), get_reset_value(i));
+				wrmsrl(MSR_IA32_PMC(i), ~0xFFFFULL);
+
+				k++;
+			}
+		}
+	}
+
+	pmc_record_active_sample(1);
+
+
+	/* Ack the PMI in the APIC */
+	apic_write(APIC_LVTPC, apic_value);
+	
+	/* Reset the instance */
+	wrmsrl(MSR_IA32_PERF_GLOBAL_STATUS_RESET, global);
+
 	// int i;
 	// int cpu_id;
 	// u64 msr;
@@ -174,7 +213,7 @@ static inline int pmi_handler(void)
 	// }
 
 end:
-	return 1;
+	return k;
 
 	// pr_info("PMI done on cpu %x\n", get_cpu());
 	// put_cpu();
@@ -269,7 +308,9 @@ int pmi_nmi_handler(unsigned int cmd, struct pt_regs *regs)
 {
 	int evt;
 
-	evt = pmi_handler();
+	// Do we need to check the interrupt condition here?
+
+	evt = pmi_handler(LVT_NMI);
 
 	return evt;
 }
@@ -278,7 +319,7 @@ int pmi_irq_handler(void)
 {
 	int evt;
 
-	evt = pmi_handler();
+	evt = pmi_handler(241);
 
 	/* ack apic */
 	apic_eoi();
