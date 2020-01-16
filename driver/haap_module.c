@@ -3,7 +3,6 @@
 #include <asm/current.h>
 
 #include "irq_facility.h"
-#include "ime_pebs.h"
 
 #include "intel/pmu.h"
 #include "device/device.h"
@@ -14,12 +13,29 @@
 unsigned long long audit = 0;
 int sample = 0;
 
+
+int check_for_pebs_support(void)
+{
+	unsigned a, b, c, d;
+
+	/* Architectural performance monitoring version ID */
+	cpuid(0xA, &a, &b, &c, &d);
+
+	pr_info("[CPUID_0AH] version: %u, counters: %u\n", a & 0xFF, (a >> 8) & 0XFF);
+
+	pr_info("[CPUID_0AH] Fixed PMC bit width: %u\n", (d << 0x4) & 0XFF);
+
+	return 0;
+}
+
 static __init int haap_module_init(void)
 {
 	int err = 0;
 	//check_for_pebs_support();
 
 	struct hook_pair hooks;
+
+	check_for_pebs_support();
 
 	pmc_cleanup();
 	//enable_nmi();
@@ -28,9 +44,6 @@ static __init int haap_module_init(void)
 	pmu_init();
 
 	device_init(&module_fops);
-
-	// TODO
-	init_pebs_struct();
 	
 	hooks.func_pos = pmc_on_on_cpu;
 	hooks.func_neg = pmc_off_on_cpu;
@@ -57,8 +70,6 @@ static void __exit haap_module_exit(void)
 	// TODO it should finilize the switch hook
 	switch_hook_pause();
 
-	// TODO
-	exit_pebs_struct();
 	// disable_nmi();
 
 	device_fini();

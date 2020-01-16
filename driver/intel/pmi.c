@@ -35,7 +35,6 @@ static void pmi_lvt_cleanup_on_cpu(void *dummy)
 	apic_write(APIC_LVTPC, (*this_cpu_ptr(&pcpu_lvt_bkp)));
 }
 
-
 /* Setup the PMI's NMI handler */
 static int pmi_nmi_setup(void)
 {
@@ -122,7 +121,7 @@ void pmi_fini(void)
 static inline int pmi_handler(unsigned apic_value)
 {
 
-	u64 global;//, msr, reset;
+	u64 global;//, msr;//, reset;
 	int i, k = 0;
 	pr_info("IN NMI HANDLER\n");
 	rdmsrl(MSR_IA32_PERF_GLOBAL_STATUS, global);
@@ -142,22 +141,57 @@ static inline int pmi_handler(unsigned apic_value)
 	// 	return 1;
 	// }
 
+	/* Check for PEBS overflow*/
+	if (global & BIT_ULL(62)) {
+		pr_info("Handling PEBS PMI\n");
+		pebs_buffer_store_n_replace();
+
+		// for (i = 0; i < pmc_max_available(); ++i) {
+		// 	rdmsrl(MSR_IA32_PMC(i), msr);
+		// 	if(msr < ~0xFFFFFFULL){
+		// 		wrmsrl(MSR_IA32_PMC(i), ~0xFFFFFFULL);
+		// 	}
+		// }
+
+		// if (smp_processor_id() == 0) {
+		// 	for (i = 0; i < pmc_max_available(); i++) {
+		// 		rdmsrl(MSR_IA32_PMC(i), msr);
+		// 		pr_info("PMC Value down? %llx\n", msr);
+		// 	}
+		// }
+
+		++k;
+	}
+
+	/* Check for fixed0 overflow*/
+	if ((global & BIT_ULL(32)) && core_state.fixed0_sampling) {
+		pr_info("Handling FIXED0 PMI\n");
+		pmc_record_active_sample(1);
+		// Create dedicate dmethod in pmc.c
+		for (i = 0; i < pmc_max_available(); i++) {
+			wrmsrl(MSR_IA32_PMC(i), 0ULL);
+		}
+		reset_sampling_fixed0();
+		k++;
+	}
+	
 	// Plain PMCs check
 	/* Check for PMI coming from PMCs */
 	if (global & 0xFULL) {
-		for (i = 0; i < pmc_max_available(); i++) {
+		pr_info("Handling PMCs PMI\n");
+		for (i = 0; i < pmc_max_available(); ++i) {
 			if (global & BIT_ULL(i)) {
-				pr_info("Look for: %u - %llx\n", i, BIT_ULL(i));
+				// pr_info("Look for: %u - %llx\n", i, BIT_ULL(i));
 				// reset the single pmc value
 				// wrmsrl(MSR_IA32_PMC(i), get_reset_value(i));
-				wrmsrl(MSR_IA32_PMC(i), ~0xFFFFULL);
+				// wrmsrl(MSR_IA32_PMC(i), ~0xFFFFULL);
 
-				k++;
+				// k++;
 			}
 		}
 	}
 
-	pmc_record_active_sample(1);
+	// pmc_record_active_sample(1);
 
 
 	/* Ack the PMI in the APIC */

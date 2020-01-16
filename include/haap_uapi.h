@@ -38,7 +38,7 @@ struct pmc_conf {
 	unsigned counting;
 	
 	uint64_t event;
-
+	
 	unsigned pebs;
 
 	unsigned fixed;
@@ -52,7 +52,9 @@ struct pmc_conf_list {
 
 	unsigned nr_fxd_pmcs;
 	struct pmc_conf *fxd_pmcs;
-
+	
+	/* Disabled if 0 */
+	uint64_t sampling_period;
 	// unsigned nr_off_pmcs;
 	// struct pmc_conf *off_pmcs;
 };

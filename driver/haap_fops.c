@@ -5,7 +5,6 @@
 #include <linux/vmalloc.h>
 
 #include "intel_pmc_events.h"
-#include "ime_pebs.h"
 // #include "irq_facility.h"
 #include "intel/pmu.h"
 
@@ -19,7 +18,8 @@ struct file_operations module_fops = {
 };
 
 extern struct pebs_user* buffer_sample;
-u64 reset_value_pmc[MAX_ID_PMC];
+// TODO
+u64 reset_value_pmc[4];
 u64 size_buffer_samples;
 // DEFINE_PER_CPU(struct pmc_cfg *, pcpu_pmc_cfg);
 DEFINE_PER_CPU(struct statistics *, pcpu_head);
@@ -223,6 +223,7 @@ static long __setup_pmc(void *arg)
 
 
 	pmc_setup(&cpu_cfg);
+	pmc_setup_mode(usr_pmc_list.sampling_period);
 	pr_info("PMC's setup done\n");	
 	
 	// TODO send pebs information
@@ -371,66 +372,66 @@ long module_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 
 
-    if(cmd == IME_SIZE_BUFFER){
-		unsigned long* args = (unsigned long*)kzalloc (sizeof(unsigned long), GFP_KERNEL);
-		if (!args) return -ENOMEM;
-		err = copy_from_user(args, (void *)arg, sizeof(unsigned long));
-		if(err) {
-			kfree(args);
-			return -1;
-		}
-		*args = retrieve_buffer_size();
-		size_buffer_samples = *args;
-		err = copy_to_user((void *)arg, args, sizeof(unsigned long));
-		if(err) {
-			kfree(args);
-			return -1;
-		}
+ //    if(cmd == IME_SIZE_BUFFER){
+	// 	unsigned long* args = (unsigned long*)kzalloc (sizeof(unsigned long), GFP_KERNEL);
+	// 	if (!args) return -ENOMEM;
+	// 	err = copy_from_user(args, (void *)arg, sizeof(unsigned long));
+	// 	if(err) {
+	// 		kfree(args);
+	// 		return -1;
+	// 	}
+	// 	*args = retrieve_buffer_size();
+	// 	size_buffer_samples = *args;
+	// 	err = copy_to_user((void *)arg, args, sizeof(unsigned long));
+	// 	if(err) {
+	// 		kfree(args);
+	// 		return -1;
+	// 	}
 
-		kfree(args);
-		return 0;
-	}
+	// 	kfree(args);
+	// 	return 0;
+	// }
 
-	if(cmd == IME_READ_BUFFER){
-		struct buffer_struct* args = (struct buffer_struct*) vmalloc (sizeof(struct buffer_struct)*size_buffer_samples);
-        	if (!args) return -ENOMEM;
-		err = copy_from_user(args, (void *)arg, sizeof(struct buffer_struct)*size_buffer_samples);
-		if(err) {
-			vfree(args);
-			return -1;
-		}
-		read_buffer_samples(args);
-		reset_hashtable();
-		err = copy_to_user((void *)arg, args, sizeof(struct buffer_struct)*size_buffer_samples);
-		if(err) {
-			vfree(args);
-			return -1;
-		}
+	// if(cmd == IME_READ_BUFFER){
+	// 	struct buffer_struct* args = (struct buffer_struct*) vmalloc (sizeof(struct buffer_struct)*size_buffer_samples);
+ //        	if (!args) return -ENOMEM;
+	// 	err = copy_from_user(args, (void *)arg, sizeof(struct buffer_struct)*size_buffer_samples);
+	// 	if(err) {
+	// 		vfree(args);
+	// 		return -1;
+	// 	}
+	// 	read_buffer_samples(args);
+	// 	reset_hashtable();
+	// 	err = copy_to_user((void *)arg, args, sizeof(struct buffer_struct)*size_buffer_samples);
+	// 	if(err) {
+	// 		vfree(args);
+	// 		return -1;
+	// 	}
 
-		vfree(args);
-		return 0;
-	}
+	// 	vfree(args);
+	// 	return 0;
+	// }
 
-	if(cmd == IME_SIZE_STATS){
-		unsigned long* args = (unsigned long*)kzalloc (sizeof(unsigned long), GFP_KERNEL);
-		if (!args) return -ENOMEM;
-		err = copy_from_user(args, (void *)arg, sizeof(unsigned long));
-		if(err) {
-			kfree(args);
-			return -1;
-		}
+	// if(cmd == IME_SIZE_STATS){
+	// 	unsigned long* args = (unsigned long*)kzalloc (sizeof(unsigned long), GFP_KERNEL);
+	// 	if (!args) return -ENOMEM;
+	// 	err = copy_from_user(args, (void *)arg, sizeof(unsigned long));
+	// 	if(err) {
+	// 		kfree(args);
+	// 		return -1;
+	// 	}
 
-		*args = size_stat;
+	// 	*args = size_stat;
 
-		err = copy_to_user((void *)arg, args, sizeof(unsigned long));
-		if(err) {
-			kfree(args);
-			return -1;
-		}
+	// 	err = copy_to_user((void *)arg, args, sizeof(unsigned long));
+	// 	if(err) {
+	// 		kfree(args);
+	// 		return -1;
+	// 	}
 
-		kfree(args);
-		return 0;
-	}
+	// 	kfree(args);
+	// 	return 0;
+	// }
 
 	// if(cmd == IME_EVT_STATS){
 	// 	// int k;

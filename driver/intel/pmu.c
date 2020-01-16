@@ -7,13 +7,28 @@
 #include "specs/msr.h"
 #include "pmi.h"
 
+struct pmu_core_state core_state = {0};
+
 DEFINE_PER_CPU(struct pmc_cfg *, pcpu_pmc_cfg);
 DEFINE_PER_CPU(struct pmc_data_sample *, pcpu_pmc_data_sample);
+
+// TODO create a dedicated struct
+static u64 sampling_rate;
 
 // check at runtime
 inline unsigned pmc_max_available(void)
 {
 	return 4;
+}
+
+void profiler_sampling_enable(void)
+{
+	core_state.fixed0_sampling = 1;
+}
+
+void profiler_sampling_disable(void)
+{
+	core_state.fixed0_sampling = 0;
 }
 
 struct pmc_cfg *get_pmc_config(unsigned pmc_id, unsigned cpu)
@@ -73,20 +88,27 @@ int pmu_init(void)
 	err = pmc_resource_alloc();
 	if (err) goto out;
 
+	err = pebs_init();
+	if (err) goto no_pebs;
+
 	err = pmi_init(NMI_LINE);
 	if (err) goto no_pmi;
 	// pmc_cleanup();
 
 	goto out;
 no_pmi:
+	pebs_fini();
+no_pebs:
 	pmc_resource_dealloc();
 out:
+	pr_info("PMU successfully setup {PMC, PEBS, PMI}\n");
 	return err;
 }
 
 void pmu_fini(void)
 {
 	pmi_fini();
+	pebs_fini();
 	pmc_resource_dealloc();
 }
 
@@ -112,7 +134,7 @@ void pmc_cleanup(void)
 static void __pmc_on_on_cpu(void* dummy)
 {
 	preempt_disable();
-	wrmsrl(MSR_IA32_PERF_GLOBAL_CTRL, 0xfULL | BIT(32) | BIT(33));
+	wrmsrl(MSR_IA32_PERF_GLOBAL_CTRL, 0xFULL | BIT_ULL(32) | BIT_ULL(33));
 	preempt_enable();
 }
 
@@ -201,7 +223,9 @@ static void pmc_push_state(void)
 	for (k = 0; k < pmc_max_available(); ++k) {
 		wrmsrl(MSR_IA32_PERFEVTSEL(k), cur_cfg[k].perf_evt_sel);
 		wrmsrl(MSR_IA32_PMC(k), cur_cfg[k].counter);
-	}		
+	}	
+
+	pebs_ds_update_on_cpu(NULL);	
 }
 
 static void pmc_setup_on_core(void* arg)
@@ -255,10 +279,55 @@ static void pmc_setup_on_core(void* arg)
 	pmc_push_state();
 }
 
+void reset_sampling_fixed0(void)
+{
+	u64 msr;
+	if (sampling_rate > 0) {
+		rdmsrl(IA32_PERF_FIXED_CTR0, msr);
+		pr_info("[BEFORE setup] IA32_PERF_FIXED_CTR0: %llx, %llx\n", msr, (BIT_ULL(48) - 1) & (~sampling_rate));
+		wrmsrl(IA32_PERF_FIXED_CTR0, (BIT_ULL(48) - 1) & (~sampling_rate));
+		rdmsrl(IA32_PERF_FIXED_CTR0, msr);
+		pr_info("[AFTER setup] IA32_PERF_FIXED_CTR0: %llx\n", msr);
+	} else {
+		pr_warn("Tried to reset fixed0, but it should be disabled\n");
+	}
+}
+
+static void setup_sampling_fixed0(void *arg)
+{
+	u64 msr;
+
+	rdmsrl(MSR_IA32_FIXED_CTR_CTRL, msr);
+	pr_info("[BEFORE] FIXED_CTR_CTRL: %llx\n", msr);
+
+	reset_sampling_fixed0();
+
+	/* Disable fixed0 */
+	if (sampling_rate == 0) {
+		msr &= ~(0xFULL);
+	} else {
+		msr |= (BIT(3) | BIT(1));
+	}
+
+	wrmsrl(MSR_IA32_FIXED_CTR_CTRL, msr);
+	pr_info("[AFTER] FIXED_CTR_CTRL: %llx\n", msr);
+}
+
 int pmc_setup(struct pmc_cpu_cfg *cfg)
 {
 	on_each_cpu(pmc_setup_on_core, cfg, 1);
 	return 0;
+}
+
+void pmc_setup_mode(u64 new_sampling_rate)
+{
+	sampling_rate = new_sampling_rate;
+	if (sampling_rate) {
+		profiler_sampling_enable();
+	} else {
+		profiler_sampling_disable();
+	}
+	on_each_cpu(setup_sampling_fixed0, NULL, 1);
 }
 
 static void pmc_print_status_on_syslog_on_cpu(void *dummy)
@@ -269,12 +338,19 @@ static void pmc_print_status_on_syslog_on_cpu(void *dummy)
 
 	cpu_id = smp_processor_id();
 
+	// TODO remove
+	if (cpu_id != 0) return;
+
 	rdmsrl(MSR_IA32_PERF_GLOBAL_STATUS_RESET, msr);
 	pr_info("GLOBAL_STATUS_RESET: %llx\n", msr);
 	rdmsrl(MSR_IA32_PERF_GLOBAL_STATUS, msr);
 	pr_info("GLOBAL_STATUS: %llx\n", msr);
 	rdmsrl(MSR_IA32_PERF_GLOBAL_CTRL, msr);
 	pr_info("GLOBAL_CTRL: %llx\n", msr);
+	rdmsrl(MSR_IA32_FIXED_CTR_CTRL, msr);
+	pr_info("[CPU%d] MSR_IA32_FIXED_CTR_CTR: %llx\n", cpu_id, msr);
+	rdmsrl(IA32_PERF_FIXED_CTR0, msr);
+	pr_info("[CPU%d] IA32_PERF_FIXED_CTR0: %llx\n", cpu_id, msr);
 	
 	for (k = 0; k < 4; k++){
 		// TODO
@@ -285,6 +361,8 @@ static void pmc_print_status_on_syslog_on_cpu(void *dummy)
 			pr_info("[CPU%d] PMC%d: %llx\n", cpu_id, k, msr);
 		}
 	}
+
+	pebs_print_status_on_syslog();
 }
 
 void pmc_print_status_on_syslog(void)
@@ -401,4 +479,19 @@ next:
 	pr_info("[CPU %u] Sample recorded - last NULL ? %u - found %u\n", smp_processor_id(), !sample, j);
 
 	return 0;
+}
+
+void pmc_force_reset_value_on_cpu(void *arg)
+{
+	unsigned k;
+	struct pmc_cfg *cur_cfg;
+
+	cur_cfg = this_cpu_read(pcpu_pmc_cfg);
+
+	for (k = 0; k < pmc_max_available(); ++k) {
+		/* Set the bit only if the pmc requires PEBS */
+		if (!cur_cfg[k].valid) continue;
+		/* Set PMC's reset values */
+		wrmsrl(MSR_IA32_PMC(k), cur_cfg[k].reset);
+	}
 }
